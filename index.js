@@ -82,6 +82,56 @@ app.get("/", (req, res) => {
   res.send({ message: "KindnessMeet Server is running!" });
 });
 
+// Create a new Event ####################
+
+app.post("/api/events", verifyToken, async (req, res) => {
+  try {
+    const { title, description, location, eventDate, imageUrl } = req.body;
+
+    // Validate required fields
+    if (!title?.trim() || !description?.trim() || !location?.trim() || !eventDate) {
+      return res.status(400).json({
+        message: "All required fields must be provided!",
+      });
+    }
+
+    // Validate event date
+    const date = new Date(eventDate);
+
+    if (isNaN(date.getTime()) || date <= new Date()) {
+      return res.status(400).json({
+        message: "Event date must be in the future!",
+      });
+    }
+
+    // Prepare event data
+    const newEvent = {
+      title: title.trim(),
+      description: description.trim(),
+      location: location.trim(),
+      eventDate: date,
+      imageUrl: imageUrl || "",
+      creatorId: req.user.sub,
+      createdAt: new Date(),
+    };
+
+    // Save event to MongoDB
+    const result = await eventsCollection.insertOne(newEvent);
+
+    res.status(201).json({
+      message: "Event created successfully!",
+      insertedId: result.insertedId,
+    });
+  } catch (error) {
+    console.error("Create event error:", error);
+
+    res.status(500).json({
+      message: "Failed to create event!",
+    });
+  }
+});
+
+
 
 app.get("/api/protected", verifyToken, (req, res) => {
   res.send({
