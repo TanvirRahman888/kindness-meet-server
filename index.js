@@ -403,6 +403,89 @@ app.delete("/api/events/:id", verifyToken, async (req, res) => {
   }
 });
 
+//  GET My Joined Events ###########
+
+app.get("/api/my-joined-events", verifyToken, async (req, res) => {
+  try {
+    const joins = await joinedEventsCollection
+      .find({ userId: req.user.sub })
+      .sort({ joinedAt: -1 })
+      .toArray();
+
+    const eventIds = joins.map((join) => join.eventId);
+
+    const events = await eventsCollection
+      .find({ _id: { $in: eventIds } })
+      .toArray();
+
+    const eventMap = new Map(
+      events.map((event) => [event._id.toString(), event])
+    );
+
+    const result = joins.flatMap((join) => {
+      const event = eventMap.get(join.eventId.toString());
+
+      if (!event) return [];
+
+      return [{
+        _id: join._id,
+        eventId: event._id,
+        title: event.title,
+        category: event.category,
+        location: event.location,
+        eventDate: event.eventDate,
+        imageUrl: event.imageUrl,
+        creatorName: event.creatorName,
+        joinedAt: join.joinedAt,
+      }];
+    });
+
+    res.send(result);
+  } catch (error) {
+    console.error("Get joined events error:", error);
+
+    res.status(500).send({
+      message: "Failed to fetch joined events!",
+    });
+  }
+});
+
+// DELETE Event ###############
+
+app.delete("/api/my-joined-events/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({
+        message: "Invalid event ID!",
+      });
+    }
+
+    const result = await joinedEventsCollection.deleteOne({
+      eventId: new ObjectId(id),
+      userId: req.user.sub,
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({
+        message: "Joined event not found!",
+      });
+    }
+
+    res.send({
+      message: "You have successfully left the event!",
+    });
+  } catch (error) {
+    console.error("Leave event error:", error);
+
+    res.status(500).send({
+      message: "Failed to leave event!",
+    });
+  }
+});
+
+
 
 app.get("/api/protected", verifyToken, (req, res) => {
   res.send({
