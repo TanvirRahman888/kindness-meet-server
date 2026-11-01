@@ -369,6 +369,40 @@ app.patch("/api/events/:id", verifyToken, async (req, res) => {
   }
 });
 
+//  Delete event ##############
+
+app.delete("/api/events/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid event ID!" });
+    }
+
+    const eventId = new ObjectId(id);
+
+    const result = await eventsCollection.deleteOne({
+      _id: eventId,
+      creatorId: req.user.sub,
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({
+        message: "Event not found or access denied!",
+      });
+    }
+
+    // Remove volunteers associated with the deleted event
+    await joinedEventsCollection.deleteMany({ eventId });
+
+    res.send({ message: "Event deleted successfully!" });
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to delete event!",
+    });
+  }
+});
+
 
 app.get("/api/protected", verifyToken, (req, res) => {
   res.send({
