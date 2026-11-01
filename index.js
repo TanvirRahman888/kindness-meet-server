@@ -316,6 +316,59 @@ app.get("/api/my-events", verifyToken, async (req, res) => {
   }
 });
 
+//  Update event ##########
+
+app.patch("/api/events/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid event ID!" });
+    }
+
+    const { title, description, category, location, eventDate, imageUrl } =
+      req.body;
+
+    const date = new Date(eventDate);
+
+    if (Number.isNaN(date.getTime()) || date <= new Date()) {
+      return res.status(400).send({
+        message: "Event date must be in the future!",
+      });
+    }
+
+    const result = await eventsCollection.updateOne(
+      {
+        _id: new ObjectId(id),
+        creatorId: req.user.sub,
+      },
+      {
+        $set: {
+          title,
+          description,
+          category,
+          location,
+          eventDate: date,
+          imageUrl,
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({
+        message: "Event not found or access denied!",
+      });
+    }
+
+    res.send({ message: "Event updated successfully!" });
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to update event!",
+    });
+  }
+});
+
 
 app.get("/api/protected", verifyToken, (req, res) => {
   res.send({
