@@ -72,6 +72,7 @@ const mongoClient = await connectToMongoDB();
 const db = mongoClient.db("KindnessMeet");
 
 // Collections
+const categoriesCollection = db.collection("categories");
 const eventsCollection = db.collection("events");
 const joinedEventsCollection = db.collection("joinedEvents");
 
@@ -82,51 +83,80 @@ app.get("/", (req, res) => {
   res.send({ message: "KindnessMeet Server is running!" });
 });
 
+// Get Categories API ####################
+app.get("/api/categories", async (req, res) => {
+  try {
+    const categories = await categoriesCollection
+      .find()
+      .sort({ name: 1 })
+      .toArray();
+
+    res.send(categories);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch categories!",
+    });
+  }
+});
+
 // Create a new Event ####################
+
 
 app.post("/api/events", verifyToken, async (req, res) => {
   try {
-    const { title, description, location, eventDate, imageUrl } = req.body;
+    const {
+      title,
+      description,
+      category,
+      location,
+      eventDate,
+      imageUrl,
+    } = req.body;
 
-    // Validate required fields
-    if (!title?.trim() || !description?.trim() || !location?.trim() || !eventDate) {
-      return res.status(400).json({
-        message: "All required fields must be provided!",
-      });
-    }
-
-    // Validate event date
-    const date = new Date(eventDate);
-
-    if (isNaN(date.getTime()) || date <= new Date()) {
-      return res.status(400).json({
-        message: "Event date must be in the future!",
-      });
-    }
-
-    // Prepare event data
     const newEvent = {
-      title: title.trim(),
-      description: description.trim(),
-      location: location.trim(),
-      eventDate: date,
-      imageUrl: imageUrl || "",
+      title,
+      description,
+      category,
+      location,
+      eventDate: new Date(eventDate),
+      imageUrl,
       creatorId: req.user.sub,
+      creatorName: req.user.name,
+      creatorEmail: req.user.email,
       createdAt: new Date(),
     };
 
-    // Save event to MongoDB
     const result = await eventsCollection.insertOne(newEvent);
 
-    res.status(201).json({
+    res.status(201).send({
       message: "Event created successfully!",
       insertedId: result.insertedId,
     });
   } catch (error) {
     console.error("Create event error:", error);
 
-    res.status(500).json({
+    res.status(500).send({
       message: "Failed to create event!",
+    });
+  }
+});
+
+
+// Get Upcomming Events ##############
+
+app.get("/api/events", async (req, res) => {
+  try {
+    const events = await eventsCollection
+      .find({
+        eventDate: { $gt: new Date() },
+      })
+      .sort({ eventDate: 1 })
+      .toArray();
+
+    res.send(events);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch upcoming events!",
     });
   }
 });
