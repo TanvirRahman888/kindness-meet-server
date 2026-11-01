@@ -1,6 +1,6 @@
 
 import express from "express";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId  } from "mongodb";
 import cors from "cors";
 import "dotenv/config";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -15,7 +15,7 @@ app.use(express.json());
 // JWT Middleware
 
 
-const authURL = process.env.CLIENT_URL || "http://localhost:3000";
+const authURL = process.env.CLIENT_URL;
 
 const JWKS = createRemoteJWKSet(
   new URL(`${authURL}/api/auth/jwks`)
@@ -99,8 +99,8 @@ app.get("/api/categories", async (req, res) => {
   }
 });
 
-// Create a new Event ####################
 
+// Create a new Event ####################
 
 app.post("/api/events", verifyToken, async (req, res) => {
   try {
@@ -161,6 +161,160 @@ app.get("/api/events", async (req, res) => {
   }
 });
 
+// Get single event #################
+
+
+app.get("/api/events/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid event ID!" });
+    }
+
+    const event = await eventsCollection.findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!event) {
+      return res.status(404).send({
+        message: "Event not found!",
+      });
+    }
+
+    res.send(event);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch event!",
+    });
+  }
+});
+
+// Get joined volunteers ###############
+
+app.get("/api/events/:id/volunteers", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid event ID!" });
+    }
+
+    const volunteers = await joinedEventsCollection
+      .find({ eventId: new ObjectId(id) })
+      .project({
+        _id: 0,
+        userId: 1,
+        userName: 1,
+        userImage: 1,
+      })
+      .toArray();
+
+    res.send(volunteers);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch volunteers!",
+    });
+  }
+});
+
+// await joinedEventsCollection.createIndex(
+//   { eventId: 1, userId: 1 },
+//   { unique: true }
+// );
+
+// Join Event API ################
+
+
+app.post("/api/events/:id/join", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({
+        message: "Invalid event ID!",
+      });
+    }
+
+    const eventId = new ObjectId(id);
+
+    const event = await eventsCollection.findOne({
+      _id: eventId,
+    });
+
+    if (!event) {
+      return res.status(404).send({
+        message: "Event not found!",
+      });
+    }
+
+    // Organizer cannot join their own event
+    if (event.creatorId === req.user.sub) {
+      return res.status(403).send({
+        message: "You cannot join your own event!",
+      });
+    }
+
+    // Event must be upcoming
+    if (
+      !Number.isFinite(new Date(event.eventDate).getTime()) ||
+      new Date(event.eventDate) <= new Date()
+    ) {
+      return res.status(400).send({
+        message: "This event is no longer available!",
+      });
+    }
+
+    const volunteer = {
+      eventId,
+      userId: req.user.sub,
+      userName: req.user.name || "Volunteer",
+      userEmail: req.user.email,
+      userImage: req.user.image || null,
+      joinedAt: new Date(),
+    };
+
+    await joinedEventsCollection.insertOne(volunteer);
+
+    res.status(201).send({
+      message: "Successfully joined the event!",
+      volunteer: {
+        userId: volunteer.userId,
+        userName: volunteer.userName,
+        userImage: volunteer.userImage,
+      },
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).send({
+        message: "You have already joined this event!",
+      });
+    }
+
+    console.error("Join event error:", error);
+
+    res.status(500).send({
+      message: "Failed to join event!",
+    });
+  }
+});
+
+// GET — Logged-in user's events ##############
+
+app.get("/api/my-events", verifyToken, async (req, res) => {
+  try {
+    const events = await eventsCollection
+      .find({ creatorId: req.user.sub })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.send(events);
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to fetch your events!",
+    });
+  }
+});
 
 
 app.get("/api/protected", verifyToken, (req, res) => {
