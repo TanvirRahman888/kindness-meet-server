@@ -218,13 +218,6 @@ app.get("/api/events/:id/volunteers", async (req, res) => {
   }
 });
 
-// await joinedEventsCollection.createIndex(
-//   { eventId: 1, userId: 1 },
-//   { unique: true }
-// );
-
-// Join Event API ################
-
 
 app.post("/api/events/:id/join", verifyToken, async (req, res) => {
   try {
@@ -496,7 +489,7 @@ app.get("/api/protected", verifyToken, (req, res) => {
 
 // Start Server
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`Server running at ${PORT}`);
 });
 
 export default app;
